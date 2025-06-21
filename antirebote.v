@@ -7,7 +7,7 @@ module antirebote (
 
     reg [15:0] contador;
     reg btn_sync;
-    parameter limite = 50000; //ajustar según frecuencia del reloj
+    parameter limite = 50000; // Para 100 MHz = 0.5 ms de filtrado
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -16,21 +16,22 @@ module antirebote (
             btn_out <= 0;
         end
         else begin
-            //sincronizar la entrada
+            //sincronización
             btn_sync <= btn_in;
-
+            
             //debounce
-            if (btn_sync == btn_out) begin
-                contador <= 0; //resetear si no hay cambio
+            if (btn_sync != btn_out) begin
+                if (contador >= limite) begin
+                    btn_out <= btn_sync; //actualizar salida
+                    contador <= 0;       //reiniciar contador
+                end
+                else begin
+                    contador <= contador + 1; //incrementar contador
+                end
             end
             else begin
-                contador <= contador + 1;
-                if (contador >= limite) begin
-                    btn_out <= btn_sync; //actualizar si supera el límite
-                    contador <= 0;
-                end
+                contador <= 0; //resetear 
             end
         end
     end
-
 endmodule
