@@ -54,10 +54,14 @@ module fsm_estacionamiento (
             end
 
             AB_BLOCK: begin
-                if (sensor == 2'b01)
+                if (sensor == 2'b01)       // B activo -> continuar secuencia de SALIDA
                     next_state = B_BLOCK;
-                else if (sensor == 2'b00)
-                    next_state = IDLE; //secuencia cancelada
+                else if (sensor == 2'b10)  // A activo -> posible secuencia de ENTRADA (cancelar salida)
+                    next_state = A_BLOCK;
+                else if (sensor == 2'b00)  // Ningún sensor activo -> secuencia cancelada
+                    next_state = IDLE;
+                else                       // Mantener estado si sensor == 2'b11
+                    next_state = AB_BLOCK;
             end
 
             B_BLOCK: begin
