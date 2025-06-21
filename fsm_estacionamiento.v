@@ -6,7 +6,7 @@ module fsm_estacionamiento (
     output reg salida
 );
 
-    // Estados
+    //estados
     reg [2:0] state, next_state;
 
     localparam IDLE      = 3'b000,
@@ -15,34 +15,29 @@ module fsm_estacionamiento (
                B_BLOCK   = 3'b011,
                CHECK     = 3'b100;
 
-    reg flag_in;  // 1 si esperamos entrada, 0 si salida
+    reg flag_in;  // 1 -> entrada, 0 -> salida
 
-    // Lógica secuencial
+    //lógica secuencial
     always @(posedge clk or posedge reset) begin
-        if (reset)
+        if (reset) begin
             state <= IDLE;
-        else
-            state <= next_state;
-    end
-
-    // Lógica secuencial para flag_in
-    always @(posedge clk or posedge reset) begin
-        if (reset)
             flag_in <= 0;
-        else if (state == IDLE) begin
-            if (sensor == 2'b10)      // a bloqueado primero
-                flag_in <= 1;
-            else if (sensor == 2'b01) // b bloqueado primero
-                flag_in <= 0;
+        end
+        else begin
+            state <= next_state;
+            //actualizar flag_in solo en IDLE para evitar sobreescrituras
+            if (state == IDLE) begin
+                if (sensor == 2'b10) //a bloqueado primero
+                    flag_in <= 1;
+                else if (sensor == 2'b01) //b bloqueado primero
+                    flag_in <= 0;
+            end
         end
     end
 
-    // Lógica combinacional de transición y salidas
+    //lógica combinacional de transición
     always @(*) begin
-        entrada = 0;
-        salida  = 0;
-        next_state = state; // valor por defecto
-
+        next_state = state; //valor por defecto
         case (state)
             IDLE: begin
                 if (sensor == 2'b10)
@@ -54,38 +49,40 @@ module fsm_estacionamiento (
             A_BLOCK: begin
                 if (sensor == 2'b11)
                     next_state = AB_BLOCK;
-                else if (sensor == 2'b10)
-                    next_state = A_BLOCK;
-                else
-                    next_state = IDLE; // secuencia inválida
+                else if (sensor == 2'b00)
+                    next_state = IDLE; //secuencia cancelada
             end
 
             AB_BLOCK: begin
                 if (sensor == 2'b01)
                     next_state = B_BLOCK;
-                else if (sensor == 2'b10)
-                    next_state = A_BLOCK;
-                else
-                    next_state = AB_BLOCK;
+                else if (sensor == 2'b00)
+                    next_state = IDLE; //secuencia cancelada
             end
 
             B_BLOCK: begin
                 if (sensor == 2'b00)
                     next_state = CHECK;
-                else
-                    next_state = B_BLOCK;
+                else if (sensor == 2'b11)
+                    next_state = IDLE; //secuencia inválida
             end
 
             CHECK: begin
-                if (flag_in)
-                    entrada = 1;
-                else
-                    salida = 1;
-                next_state = IDLE;
+                next_state = IDLE; //siempre regresa a IDLE
             end
 
             default: next_state = IDLE;
         endcase
+    end
+
+    //lógica combinacional de salidas (pulsos de 1 ciclo)
+    always @(*) begin
+        entrada = 0;
+        salida = 0;
+        if (state == CHECK) begin
+            entrada = flag_in;
+            salida = !flag_in;
+        end
     end
 
 endmodule
