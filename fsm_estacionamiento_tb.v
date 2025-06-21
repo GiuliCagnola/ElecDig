@@ -1,96 +1,94 @@
-`timescale 1ns / 1ps
+`timescale 1ns/1ps
 
-module fsm_tb;
+module fsm_estacionamiento_tb;
 
-    reg clk, rst;
+    parameter CLK_PERIOD = 10; // 100 MHz
+
+    reg clk;
+    reg reset;
     reg [1:0] sensor;
-    wire entrada, salida;
-
-    reg detecto_entrada, detecto_salida;
+    wire entrada;
+    wire salida;
 
     fsm_estacionamiento dut (
         .clk(clk),
-        .rst(rst),
+        .reset(reset),
         .sensor(sensor),
         .entrada(entrada),
         .salida(salida)
     );
 
-    always #5 clk = ~clk;
-
-    // Inicialización y pruebas
     initial begin
-        $display("Iniciando testbench FSM...");
         clk = 0;
-        rst = 1;
-        sensor = 2'b00;
-        detecto_entrada = 0;
-        detecto_salida  = 0;
-
-        // Archivo de salida para GTKWave
-        $dumpfile("fsm_wave.vcd");
-        $dumpvars(0, fsm_tb);
-
-        // Reset sincronizado
-        @(posedge clk); rst = 0;
-
-        // TEST 1: Secuencia de entrada
-        $display("\nTest 1: Secuencia de entrada");
-        @(posedge clk); sensor = 2'b10; // A_BLOCK
-        @(posedge clk); sensor = 2'b11; // AB_BLOCK
-        @(posedge clk); sensor = 2'b01; // B_BLOCK
-        @(posedge clk); sensor = 2'b00; // CHECK
-
-        // Esperar algunos ciclos para captura
-        repeat(2) @(posedge clk);
-
-        if (detecto_entrada)
-            $display("Entrada detectada correctamente");
-        else
-            $display("Entrada no detectada");
-
-        detecto_entrada = 0;
-        sensor = 2'b00;
-
-        // TEST 2: Secuencia de salida
-        $display("\nTest 2: Secuencia de salida");
-        @(posedge clk); sensor = 2'b01; // B_BLOCK
-        @(posedge clk); sensor = 2'b11; // AB_BLOCK
-        @(posedge clk); sensor = 2'b10; // A_BLOCK
-        @(posedge clk); sensor = 2'b00; // CHECK
-
-        repeat(2) @(posedge clk);
-
-        if (detecto_salida)
-            $display("Salida detectada correctamente");
-        else
-            $display("Salida no detectada");
-
-        detecto_salida = 0;
-        sensor = 2'b00;
-
-        // TEST 3: Secuencia interrumpida
-        $display("\nTest 3: Salida interrumpida por nueva entrada");
-        @(posedge clk); sensor = 2'b01; // B_BLOCK
-        @(posedge clk); sensor = 2'b11; // AB_BLOCK
-        @(posedge clk); sensor = 2'b10; // vuelve A_BLOCK
-        @(posedge clk); sensor = 2'b00; // CHECK
-
-        repeat(2) @(posedge clk);
-
-        if (detecto_entrada)
-            $display("Entrada detectada tras interrupción.");
-        else
-            $display("Entrada no detectada tras interrupción.");
-
-        @(posedge clk);
-        $finish;
+        forever #(CLK_PERIOD/2) clk = ~clk;
     end
 
-    // Detección de señales de salida (pulsos de 1 ciclo)
-    always @(posedge clk) begin
-        if (entrada) detecto_entrada = 1;
-        if (salida)  detecto_salida = 1;
+    initial begin
+        $dumpfile("fsm_wave.vcd");
+        $dumpvars(0, fsm_estacionamiento_tb);
+        
+        reset = 1;
+        sensor = 2'b00; // IDLE
+        #20;
+        
+        //TEST1: Secuencia de entrada completa
+        $display("\nTest 1: Secuencia ENTRADA (00->10->11->01->00)");
+        reset = 0;
+        #10 sensor = 2'b10; // A_ON
+        #10 sensor = 2'b11; // AB_ON
+        #10 sensor = 2'b01; // B_ON
+        #10 sensor = 2'b00; // IDLE (debe activar entrada)
+        
+        #5;
+        if (entrada) 
+            $display("Éxito: entrada=1 detectado");
+        else
+            $display("Error: entrada no se activó");
+        #5;
+
+        // TEST2: Secuencia de salida completa
+        $display("\nTest 2: Secuencia SALIDA (00->01->11->10->00)");
+        #10 sensor = 2'b01; // B_ON
+        #10 sensor = 2'b11; // AB_ON
+        #10 sensor = 2'b10; // A_ON
+        #10 sensor = 2'b00; // IDLE (debe activar salida)
+        
+        #5;
+        if (salida)
+            $display("Éxito: salida=1 detectado");
+        else
+            $display("Error: salida no se activó");
+        #5;
+
+        // TEST3: Secuencia interrumpida
+        $display("\nTest 3: Secuencia interrumpida (00->10->00)");
+        #10 sensor = 2'b10; // A_ON
+        #10 sensor = 2'b00; // IDLE
+        
+        #5;
+        if (!entrada && !salida)
+            $display("Éxito: No hay activación con secuencia incompleta");
+        else
+            $display("Error: Activación incorrecta");
+        #5;
+
+        // TEST4: Secuencia inválida
+        $display("\nTest 4: Secuencia inválida (00->10->01->11->00)");
+        #10 sensor = 2'b10; // A_ON
+        #10 sensor = 2'b01; // Transición inválida
+        #10 sensor = 2'b11; // AB_ON
+        #10 sensor = 2'b00; // IDLE
+        
+        #5;
+        if (!entrada && !salida)
+            $display("Éxito: No hay activación con secuencia inválida");
+        else
+            $display("Error: Activación incorrecta");
+        #5;
+
+        #100;
+        $display("\nSimulación completada");
+        $finish;
     end
 
 endmodule
