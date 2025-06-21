@@ -2,6 +2,10 @@
 
 module antirebote_tb;
 
+    parameter CLK_PERIOD = 10;   
+    parameter DEBOUNCE_LIMIT = 50000; 
+    parameter DEBOUNCE_TIME = (DEBOUNCE_LIMIT * CLK_PERIOD) / 1000; 
+    
     reg clk, rst;
     reg btn_in;
     wire btn_out;
@@ -13,58 +17,90 @@ module antirebote_tb;
         .btn_out(btn_out)
     );
 
-    always #5 clk = ~clk;
+    always #(CLK_PERIOD/2) clk = ~clk;
+
+    // Tarea para simular rebotes
+    task rebotar;
+        input estado_final;
+        integer i;
+        begin
+            for (i = 0; i < 5; i = i + 1) begin
+                #1000 btn_in = ~btn_in; // Rebotes cada 1 us
+            end
+            btn_in = estado_final; // Estado final estable
+        end
+    endtask
 
     // Secuencia de prueba
     initial begin
-        $display("Iniciando testbench antirebote...");
+        $display("\nIniciando testbench antirebote...");
+        $display("Tiempo de debounce configurado: %0d ns", DEBOUNCE_TIME);
+        $dumpfile("antirebote_wave.vcd");
+        $dumpvars(0, antirebote_tb);
+
+        // Inicialización
         clk = 0;
         rst = 1;
         btn_in = 0;
 
-        // Reset sincronizado (2 ciclos)
-        #20 rst = 0;
+        // TEST 0: Comportamiento durante reset
+        $display("\n[TEST 0] Comportamiento durante reset");
+        #5 btn_in = 1; // Intentar activar durante reset
+        #15;
+        if (btn_out !== 0)
+            $display(" Error: btn_out debería ser 0 durante reset");
+        else
+            $display(" Éxito: btn_out = 0 durante reset");
+        
+        // Liberar reset
+        #5 rst = 0;
 
-        // TEST1: Rebotes al activar (btn_in -> 1)
-        $display("\nTest 1: Filtrado de rebote en subida");
+        // TEST 1: Rebotes en activación (0 -> 1)
+        $display("\n[TEST 1] Rebotes en activación");
         btn_in = 1;
-        repeat (5) begin // Simular 5 rebotes rápidos
-            #1000 btn_in = ~btn_in;
-        end
-        btn_in = 1; // Estado final estable
+        rebotar(1); // Rebotes terminando en 1
         
-        // Esperar a que el contador supere el límite (50000 ciclos)
-        #100000;
+        // Esperar tiempo de debounce + margen
+        #(DEBOUNCE_TIME + 1000);
         
-        @(posedge clk);
-        if (btn_out == 1)
-            $display("Éxito: btn_out = 1 (rebotes filtrados)");
+        if (btn_out === 1)
+            $display(" Éxito: btn_out = 1 (rebotes filtrados)");
         else
-            $display("Error: btn_out no se activó");
+            $display(" Error: btn_out no se activó");
 
-        // TEST2: Rebotes al desactivar (btn_in -> 0)
-        $display("\nTest 2: Filtrado de rebote en bajada");
+        // TEST 2: Rebotes en desactivación (1 -> 0)
+        $display("\n[TEST 2] Rebotes en desactivación");
         btn_in = 0;
-        repeat (5) begin
-            #1000 btn_in = ~btn_in;
-        end
-        btn_in = 0; // Estado final estable
+        rebotar(0); // Rebotes terminando en 0
         
-        #100000;
-        @(posedge clk);
-        if (btn_out == 0)
-            $display("Éxito: btn_out = 0 (rebotes filtrados)");
+        #(DEBOUNCE_TIME + 1000);
+        
+        if (btn_out === 0)
+            $display(" Éxito: btn_out = 0 (rebotes filtrados)");
         else
-            $display("Error: btn_out no se desactivó");
+            $display(" Error: btn_out no se desactivó");
 
-        #20 $display("Simulación completada");
+        // TEST 3: Rebotes prolongados
+        $display("\n[TEST 3] Rebotes que exceden tiempo de debounce");
+        btn_in = 1;
+        repeat(15) #1000 btn_in = ~btn_in; // Rebotes por 15 us
+        btn_in = 1;
+        
+        #(DEBOUNCE_TIME/2);
+        if (btn_out !== 0)
+            $display(" Éxito: btn_out sigue 0 durante rebotes prolongados");
+        else
+            $display(" Error: btn_out no mantuvo 0 durante rebotes");
+        
+        #(DEBOUNCE_TIME);
+        if (btn_out === 1)
+            $display(" Éxito: btn_out = 1 tras rebotes prolongados");
+        else
+            $display(" Error: btn_out no se activó tras rebotes");
+
+        // Finalizar
+        #100 $display("\nSimulación completada");
         $finish;
-    end
-
-    // Generar archivo VCD para GTKWave
-    initial begin
-        $dumpfile("antirebote_wave.vcd");
-        $dumpvars(0, antirebote_tb);
     end
 
 endmodule
