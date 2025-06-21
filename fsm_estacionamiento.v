@@ -1,6 +1,6 @@
 module fsm_estacionamiento (
     input wire clk,
-    input wire reset,
+    input wire rst,
     input wire [1:0] sensor,   // sensor = {a, b}
     output reg entrada,
     output reg salida
@@ -18,8 +18,8 @@ module fsm_estacionamiento (
     reg flag_in;  // 1 -> entrada, 0 -> salida
 
     //lógica secuencial
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
             state <= IDLE;
             flag_in <= 0;
         end
