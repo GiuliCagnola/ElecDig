@@ -47,6 +47,18 @@ module fsm_tb;
         #10 sensor = 2'b10; // A_BLOCK
         #10 sensor = 2'b00; // CHECK
 
+        //TEST3: Secuencia de salida interrumpida por entrada (B -> AB -> A)
+        $display("\nTest 3: Salida interrumpida por entrada");
+        #10 sensor = 2'b01; // B_BLOCK
+        #10 sensor = 2'b11; // AB_BLOCK
+        #10 sensor = 2'b10; // A_BLOCK (¡nuevo auto entrando!)
+        #10 sensor = 2'b00; // CHECK (debe activar 'entrada')
+        @(posedge clk);
+        if (entrada)
+            $display("Éxito: Secuencia de entrada priorizada");
+        else
+            $display("Error: No se detectó entrada");
+
         //verificar salida en el próximo flanco de reloj
         @(posedge clk);
         if (salida) 
